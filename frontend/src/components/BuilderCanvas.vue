@@ -1,8 +1,6 @@
 <template>
 	<div ref="canvasContainer" @click="handleClick">
-		<div
-			v-show="store.settingPage"
-			class="absolute bottom-0 left-0 right-0 top-0 z-40 grid place-items-center bg-white opacity-50 dark:bg-black"></div>
+		<slot name="header"></slot>
 		<div class="overlay absolute" id="overlay" ref="overlay" />
 		<BlockSnapGuides></BlockSnapGuides>
 		<div
