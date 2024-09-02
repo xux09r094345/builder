@@ -26,13 +26,20 @@
 			</div>
 			<Button
 				variant="solid"
+				:disabled="!store.activePage?.draft_blocks"
+				iconLeft="globe"
 				@click="
 					() => {
 						publishing = true;
 						store.publishPage().finally(() => (publishing = false));
 					}
 				"
-				class="absolute right-5 border-0 text-xs dark:bg-zinc-800"
+				class="absolute right-5 border-0"
+				:class="{
+					'bg-surface-gray-7 text-text-icons-white hover:bg-surface-gray-6':
+						!publishing && store.activePage?.draft_blocks,
+					'dark:bg-surface-gray-2 dark:text-text-icons-gray-4': !store.activePage?.draft_blocks,
+				}"
 				:loading="publishing">
 				{{ publishing ? "Publishing" : "Publish" }}
 			</Button>

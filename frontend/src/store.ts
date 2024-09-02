@@ -22,8 +22,10 @@ import {
 	getBlockObject,
 	getBlockString,
 	getCopyWithoutParent,
+	getRouteVariables,
 } from "./utils/helpers";
 import RealTimeHandler from "./utils/realtimeHandler";
+
 const useStore = defineStore("store", {
 	state: () => ({
 		editableBlock: <Block | null>null,
@@ -111,6 +113,10 @@ const useStore = defineStore("store", {
 			}
 
 			const page = await this.fetchActivePage(pageName);
+			if (!page) {
+				toast.error("Page not found");
+				return;
+			}
 			this.activePage = page;
 
 			const blocks = JSON.parse(page.draft_blocks || page.blocks || "[]");
@@ -135,13 +141,25 @@ const useStore = defineStore("store", {
 				this.settingPage = false;
 			});
 		},
+		async setActivePage(pageName: string) {
+			this.selectedPage = pageName;
+			const page = await this.fetchActivePage(pageName);
+			if (!page) {
+				return;
+			}
+			this.activePage = page;
+		},
 		async fetchActivePage(pageName: string) {
 			const webPageResource = await createDocumentResource({
 				doctype: "Builder Page",
 				name: pageName,
 				auto: true,
 			});
-			await webPageResource.get.promise;
+			try {
+				await webPageResource.get.promise;
+			} catch (e) {
+				return null;
+			}
 
 			const page = webPageResource.doc as BuilderPage;
 			return page;
@@ -333,13 +351,22 @@ const useStore = defineStore("store", {
 				fileName: fileDoc.file_name,
 			};
 		},
+		deletePage: async (page: BuilderPage) => {
+			const confirmed = await confirm(
+				`Are you sure you want to delete page: ${page.page_title || page.page_name}?`,
+			);
+			if (confirmed) {
+				await webPages.delete.submit(page.name);
+			}
+			toast.success("Page deleted successfully!");
+		},
 		async publishPage() {
 			await this.waitTillPageIsSaved();
 			return webPages.runDocMethod
 				.submit({
 					name: this.selectedPage as string,
 					method: "publish",
-					...this.routeVariables,
+					route_variables: this.routeVariables,
 				})
 				.then(async () => {
 					posthog.capture("builder_page_published", {
@@ -349,13 +376,45 @@ const useStore = defineStore("store", {
 					this.openPageInBrowser(this.activePage as BuilderPage);
 				});
 		},
+		unpublishPage() {
+			return webPages.setValue
+				.submit({
+					name: this.selectedPage,
+					published: false,
+				})
+				.then(() => {
+					toast.success("Page unpublished");
+					this.setPage(this.selectedPage as string);
+					builderSettings.reload();
+				});
+		},
+		updateActivePage(key: keyof BuilderPage, value: any) {
+			if (!this.activePage) {
+				return;
+			}
+			return webPages.setValue
+				.submit({
+					name: this.activePage.name as string,
+					[key]: value,
+				})
+				.then(() => {
+					if (this.activePage) {
+						this.activePage[key] = value;
+					}
+				});
+		},
 		openPageInBrowser(page: BuilderPage) {
 			let route = page.route;
-			if (page.dynamic_route && this.pageData) {
-				const routeVariables = (route?.match(/<\w+>/g) || []).map((match: string) => match.slice(1, -1));
+			if (this.pageData) {
+				const routeVariables = getRouteVariables(route || "");
 				routeVariables.forEach((variable: string) => {
-					if (this.routeVariables[variable]) {
-						route = route?.replace(`<${variable}>`, this.routeVariables[variable]);
+					const routeVariableValue = this.routeVariables[variable];
+					if (routeVariableValue) {
+						if (route?.includes(`<${variable}>`)) {
+							route = route?.replace(`<${variable}>`, routeVariableValue);
+						} else if (route?.includes(`:${variable}`)) {
+							route = route?.replace(`:${variable}`, routeVariableValue);
+						}
 					}
 				});
 			}
@@ -369,10 +428,15 @@ const useStore = defineStore("store", {
 				name: this.selectedPage,
 				draft_blocks: pageData,
 			};
-			return webPages.setValue.submit(args).finally(() => {
-				this.savingPage = false;
-				this.activeCanvas?.toggleDirty(false);
-			});
+			return webPages.setValue
+				.submit(args)
+				.then((page: BuilderPage) => {
+					this.activePage = page;
+				})
+				.finally(() => {
+					this.savingPage = false;
+					this.activeCanvas?.toggleDirty(false);
+				});
 		},
 		setPageData(page?: BuilderPage) {
 			if (!page || !page.page_data_script) {
@@ -383,7 +447,7 @@ const useStore = defineStore("store", {
 				.submit({
 					method: "get_page_data",
 					name: page.name,
-					...this.routeVariables,
+					route_variables: this.routeVariables,
 				})
 				.then((data: { message: { [key: string]: [] } }) => {
 					this.pageData = data.message;
@@ -414,6 +478,24 @@ const useStore = defineStore("store", {
 		},
 		isHomePage(page: BuilderPage | null = null) {
 			return builderSettings.doc.home_page === (page || this.activePage)?.route;
+		},
+		setHomePage(route: string) {
+			return builderSettings.setValue
+				.submit({
+					home_page: route,
+				})
+				.then(() => {
+					toast.success("Home page set successfully!");
+				});
+		},
+		unsetHomePage() {
+			return builderSettings.setValue
+				.submit({
+					home_page: "",
+				})
+				.then(() => {
+					toast.warning("This page will no longer be the home page");
+				});
 		},
 		async waitTillPageIsSaved() {
 			// small delay so that all the save requests are triggered

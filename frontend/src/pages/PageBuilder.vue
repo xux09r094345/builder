@@ -563,18 +563,26 @@ onActivated(async () => {
 	}
 	if (route.params.pageId && route.params.pageId !== "new") {
 		store.setPage(route.params.pageId as string);
-	} else {
-		await webPages.insert
-			.submit({
-				page_title: "My Page",
-				draft_blocks: [store.getRootBlock()],
-			})
-			.then((data: BuilderPage) => {
-				router.push({ name: "builder", params: { pageId: data.name }, force: true });
-				store.setPage(data.name);
-			});
 	}
 });
+
+watch(
+	route,
+	(to, from) => {
+		if (to.name === "builder" && to.params.pageId === "new") {
+			webPages.insert
+				.submit({
+					page_title: "My Page",
+					draft_blocks: [store.getRootBlock()],
+				})
+				.then((data: BuilderPage) => {
+					router.push({ name: "builder", params: { pageId: data.name }, force: true });
+					store.setPage(data.name);
+				});
+		}
+	},
+	{ immediate: true },
+);
 
 onDeactivated(() => {
 	store.realtime.doc_close("Builder Page", store.activePage?.name as string);
@@ -639,6 +647,6 @@ watch(
 .page-builder {
 	--left-panel-width: 17rem;
 	--right-panel-width: 20rem;
-	--toolbar-height: 3.5rem;
+	--toolbar-height: 3rem;
 }
 </style>

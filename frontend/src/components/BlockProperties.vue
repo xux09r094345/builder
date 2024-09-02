@@ -1,6 +1,6 @@
 <template>
 	<div v-if="blockController.isBLockSelected()" class="flex select-none flex-col pb-16">
-		<div class="sticky top-9 z-50 mt-[-15px] flex w-full bg-white py-3 dark:bg-zinc-900">
+		<div class="sticky top-[41px] z-50 mt-[-15px] flex w-full bg-white py-3 dark:bg-zinc-900">
 			<Input
 				ref="searchInput"
 				type="text"
@@ -46,6 +46,7 @@ import CodeEditor from "./CodeEditor.vue";
 import CollapsibleSection from "./CollapsibleSection.vue";
 import ColorInput from "./ColorInput.vue";
 import DimensionInput from "./DimensionInput.vue";
+import ImageUploadInput from "./ImageUploadInput.vue";
 import InlineInput from "./InlineInput.vue";
 import Input from "./Input.vue";
 import ObjectEditor from "./ObjectEditor.vue";
@@ -696,80 +697,6 @@ const optionsSectionProperties = [
 		component: InlineInput,
 		getProps: () => {
 			return {
-				label: "Image URL",
-				modelValue: blockController.getAttribute("src"),
-			};
-		},
-		searchKeyWords: "Image, URL, Src",
-		events: {
-			"update:modelValue": (val: string) => blockController.setAttribute("src", val),
-		},
-		condition: () => blockController.isImage(),
-	},
-	{
-		component: Button,
-		getProps: () => {
-			return {
-				label: "Convert to WebP",
-				class: "text-base dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700",
-			};
-		},
-		innerText: "Convert to WebP",
-		searchKeyWords: "Convert, webp, Convert to webp, image, src, url",
-		events: {
-			click: () => {
-				const block = blockController.getSelectedBlocks()[0];
-				const convertToWebP = createResource({
-					url: "/api/method/builder.api.convert_to_webp",
-					params: {
-						image_url: block.getAttribute("src"),
-					},
-				});
-				toast.promise(
-					convertToWebP.fetch().then((res: string) => {
-						block.setAttribute("src", res);
-					}),
-					{
-						loading: "Converting...",
-						success: () => "Image converted to WebP",
-						error: () => "Failed to convert image to WebP",
-					},
-				);
-			},
-		},
-		condition: () => {
-			if (!blockController.isImage()) {
-				return false;
-			}
-			if (
-				[".jpg", ".jpeg", ".png"].some((ext) =>
-					((blockController.getAttribute("src") as string) || ("" as string)).toLowerCase().endsWith(ext),
-				)
-			) {
-				return true;
-			}
-		},
-	},
-	{
-		component: InlineInput,
-		getProps: () => {
-			return {
-				label: "Image Fit",
-				type: "select",
-				options: ["fill", "contain", "cover", "none"],
-				modelValue: blockController.getStyle("objectFit"),
-			};
-		},
-		searchKeyWords: "Image, Fit, ObjectFit, Object Fit, Fill, Contain, Cover, None",
-		events: {
-			"update:modelValue": (val: StyleValue) => blockController.setStyle("objectFit", val),
-		},
-		condition: () => blockController.isImage(),
-	},
-	{
-		component: InlineInput,
-		getProps: () => {
-			return {
 				label: "Input Type",
 				type: "select",
 				options: ["text", "number", "email", "password", "date", "time", "search", "tel", "url", "color"],
@@ -867,20 +794,6 @@ const optionsSectionProperties = [
 		events: {
 			"update:modelValue": (val: StyleValue) => blockController.setStyle("overflowY", val),
 		},
-	},
-	{
-		component: InlineInput,
-		getProps: () => {
-			return {
-				label: "Alt Text",
-				modelValue: blockController.getAttribute("alt"),
-			};
-		},
-		searchKeyWords: "Alt, Text, AltText, Alternate Text",
-		events: {
-			"update:modelValue": (val: string) => blockController.setAttribute("alt", val),
-		},
-		condition: () => blockController.isImage(),
 	},
 	{
 		component: InlineInput,
@@ -1140,6 +1053,82 @@ const videoOptionsSectionProperties = [
 	},
 ];
 
+const imageOptionsSectionProperties = [
+	{
+		component: ImageUploadInput,
+		getProps: () => {
+			return {
+				label: "Image URL",
+				imageURL: blockController.getAttribute("src"),
+				imageFit: blockController.getStyle("objectFit"),
+			};
+		},
+		events: {
+			"update:imageURL": (val: string) => blockController.setAttribute("src", val),
+			"update:imageFit": (val: StyleValue) => blockController.setStyle("objectFit", val),
+		},
+		searchKeyWords: "Image, URL, Src, Fit, ObjectFit, Object Fit, Fill, Contain, Cover",
+	},
+	{
+		component: Button,
+		getProps: () => {
+			return {
+				label: "Convert to WebP",
+				class: "text-base dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700",
+			};
+		},
+		innerText: "Convert to WebP",
+		searchKeyWords: "Convert, webp, Convert to webp, image, src, url",
+		events: {
+			click: () => {
+				const block = blockController.getSelectedBlocks()[0];
+				const convertToWebP = createResource({
+					url: "/api/method/builder.api.convert_to_webp",
+					params: {
+						image_url: block.getAttribute("src"),
+					},
+				});
+				toast.promise(
+					convertToWebP.fetch().then((res: string) => {
+						block.setAttribute("src", res);
+					}),
+					{
+						loading: "Converting...",
+						success: () => "Image converted to WebP",
+						error: () => "Failed to convert image to WebP",
+					},
+				);
+			},
+		},
+		condition: () => {
+			if (!blockController.isImage()) {
+				return false;
+			}
+			if (
+				[".jpg", ".jpeg", ".png"].some((ext) =>
+					((blockController.getAttribute("src") as string) || ("" as string)).toLowerCase().endsWith(ext),
+				)
+			) {
+				return true;
+			}
+		},
+	},
+	{
+		component: InlineInput,
+		getProps: () => {
+			return {
+				label: "Alt Text",
+				modelValue: blockController.getAttribute("alt"),
+			};
+		},
+		searchKeyWords: "Alt, Text, AltText, Alternate Text",
+		events: {
+			"update:modelValue": (val: string) => blockController.setAttribute("alt", val),
+		},
+		condition: () => blockController.isImage(),
+	},
+];
+
 const sections = [
 	{
 		name: "Link",
@@ -1153,6 +1142,16 @@ const sections = [
 		condition: () => !blockController.multipleBlocksSelected(),
 	},
 	{
+		name: "Image Options",
+		properties: imageOptionsSectionProperties,
+		condition: () => blockController.isImage(),
+	},
+	{
+		name: "Video Options",
+		properties: videoOptionsSectionProperties,
+		condition: () => blockController.isVideo(),
+	},
+	{
 		name: "Typography",
 		properties: typographySectionProperties,
 		condition: () => blockController.isText() || blockController.isContainer() || blockController.isInput(),
@@ -1161,12 +1160,6 @@ const sections = [
 		name: "Style",
 		properties: styleSectionProperties,
 	},
-	{
-		name: "Video Options",
-		properties: videoOptionsSectionProperties,
-		condition: () => blockController.isVideo(),
-	},
-
 	{
 		name: "Dimension",
 		properties: dimensionSectionProperties,

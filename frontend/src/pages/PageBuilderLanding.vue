@@ -1,6 +1,6 @@
 <template>
 	<div
-		class="toolbar sticky top-0 z-10 flex h-14 items-center justify-center bg-white p-2 shadow-sm dark:border-b-[1px] dark:border-gray-800 dark:bg-zinc-900"
+		class="toolbar sticky top-0 z-10 flex h-12 items-center justify-center bg-white p-2 shadow-sm dark:border-b-[1px] dark:border-gray-800 dark:bg-zinc-900"
 		ref="toolbar">
 		<div class="absolute left-3 flex items-center">
 			<router-link class="flex items-center gap-2" :to="{ name: 'home' }">
@@ -13,13 +13,6 @@
 		<div class="mb-6 flex items-center justify-between">
 			<h1 class="text-lg font-medium text-gray-900 dark:text-zinc-400">All Pages</h1>
 			<div class="flex gap-4">
-				<TabButtons
-					:buttons="[
-						{ label: 'Grid', value: 'grid' },
-						{ label: 'List', value: 'list' },
-					]"
-					v-model="displayType"
-					class="w-fit self-end [&>div>button[aria-checked='false']]:dark:!bg-transparent [&>div>button[aria-checked='false']]:dark:!text-zinc-400 [&>div>button[aria-checked='true']]:dark:!bg-zinc-700 [&>div>button]:dark:!bg-zinc-700 [&>div>button]:dark:!text-zinc-100 [&>div]:dark:!bg-zinc-900"></TabButtons>
 				<div class="relative flex">
 					<Input
 						class="w-44 [&>div>input]:dark:bg-zinc-900"
@@ -35,7 +28,7 @@
 				</div>
 				<Input
 					type="select"
-					class="w-36 [&>div>select]:dark:bg-zinc-900"
+					class="w-24 [&>div>select]:dark:bg-zinc-900"
 					v-model="typeFilter"
 					:options="[
 						{ label: 'All', value: '' },
@@ -43,7 +36,24 @@
 						{ label: 'Published', value: 'published' },
 						{ label: 'Unpublished', value: 'unpublished' },
 					]" />
-				<!-- <Button variant="solid" icon-left="plus" @click="() => (showDialog = true)">New</Button> -->
+				<Input
+					type="select"
+					class="w-32 [&>div>select]:dark:bg-zinc-900"
+					v-model="orderBy"
+					:options="[
+						{ label: 'Sort', value: '', disabled: true },
+						{ label: 'Last Created', value: 'creation' },
+						{ label: 'Last Modified', value: 'modified' },
+						{ label: 'Alphabetically (A-Z)', value: 'alphabetically_a_z' },
+						{ label: 'Alphabetically (Z-A)', value: 'alphabetically_z_a' },
+					]" />
+				<OptionToggle
+					class="[&>div>div]:dark:!bg-zinc-900 [&>div]:min-w-0"
+					:options="[
+						{ label: 'Grid', value: 'grid', icon: 'grid', hideLabel: true },
+						{ label: 'List', value: 'list', icon: 'list', hideLabel: true },
+					]"
+					v-model="displayType"></OptionToggle>
 				<router-link
 					:to="{ name: 'builder', params: { pageId: 'new' } }"
 					@click="
@@ -51,7 +61,12 @@
 							posthog.capture('builder_new_page_created');
 						}
 					">
-					<Button variant="solid" icon-left="plus">New</Button>
+					<Button
+						variant="solid"
+						iconLeft="plus"
+						class="bg-surface-gray-7 !text-text-icons-white hover:bg-surface-gray-6">
+						New
+					</Button>
 				</router-link>
 			</div>
 		</div>
@@ -106,7 +121,7 @@
 								{
 									group: 'Delete',
 									hideLabel: true,
-									items: [{ label: 'Delete', onClick: () => deletePage(page), icon: 'trash' }],
+									items: [{ label: 'Delete', onClick: () => store.deletePage(page), icon: 'trash' }],
 								},
 							]"
 							size="xs"
@@ -173,7 +188,7 @@
 								:options="[
 									{ label: 'Duplicate', onClick: () => duplicatePage(page), icon: 'copy' },
 									{ label: 'View in Desk', onClick: () => store.openInDesk(page), icon: 'arrow-up-right' },
-									{ label: 'Delete', onClick: () => deletePage(page), icon: 'trash' },
+									{ label: 'Delete', onClick: () => store.deletePage(page), icon: 'trash' },
 								]"
 								size="sm"
 								placement="right">
@@ -211,15 +226,15 @@
 </template>
 <script setup lang="ts">
 import Input from "@/components/Input.vue";
+import OptionToggle from "@/components/OptionToggle.vue";
 import TemplateSelector from "@/components/TemplateSelector.vue";
 import { webPages } from "@/data/webPage";
 import useStore from "@/store";
 import { posthog } from "@/telemetry";
 import { BuilderPage } from "@/types/Builder/BuilderPage";
-import { confirm } from "@/utils/helpers";
 import { UseTimeAgo } from "@vueuse/components";
 import { useStorage, watchDebounced } from "@vueuse/core";
-import { Badge, createDocumentResource, Dropdown, TabButtons } from "frappe-ui";
+import { Badge, createDocumentResource, Dropdown } from "frappe-ui";
 import { onActivated, Ref, ref } from "vue";
 
 const store = useStore();
@@ -227,14 +242,25 @@ const displayType = useStorage("displayType", "grid") as Ref<"grid" | "list">;
 
 const searchFilter = ref("");
 const typeFilter = ref("");
+const orderBy = useStorage("orderBy", "creation") as Ref<
+	"creation" | "modified" | "alphabetically_a_z" | "alphabetically_z_a"
+>;
+
 const showDialog = ref(false);
+
+const orderMap = {
+	creation: "creation desc",
+	modified: "modified desc",
+	alphabetically_a_z: "page_title asc",
+	alphabetically_z_a: "page_title desc",
+};
 
 onActivated(() => {
 	posthog.capture("builder_landing_page_visited");
 });
 
 watchDebounced(
-	[searchFilter, typeFilter],
+	[searchFilter, typeFilter, orderBy],
 	() => {
 		const filters = {
 			is_template: 0,
@@ -256,20 +282,12 @@ watchDebounced(
 		webPages.update({
 			filters,
 			orFilters,
+			orderBy: orderMap[orderBy.value],
 		});
 		webPages.fetch();
 	},
 	{ debounce: 300 },
 );
-
-const deletePage = async (page: BuilderPage) => {
-	const confirmed = await confirm(
-		`Are you sure you want to delete page: ${page.page_title || page.page_name}?`,
-	);
-	if (confirmed) {
-		await webPages.delete.submit(page.name);
-	}
-};
 
 const duplicatePage = async (page: BuilderPage) => {
 	const webPageResource = await createDocumentResource({

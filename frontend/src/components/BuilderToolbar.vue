@@ -1,31 +1,61 @@
 <template>
 	<div
-		class="toolbar flex h-14 items-center justify-center bg-white p-2 shadow-sm dark:border-b-[1px] dark:border-gray-800 dark:bg-zinc-900"
+		class="toolbar flex items-center justify-center bg-white px-2 py-1 shadow-sm dark:border-b-[1px] dark:border-gray-800 dark:bg-zinc-900"
 		ref="toolbar">
-		<div class="absolute left-3 flex items-center">
-			<router-link class="flex items-center gap-2" :to="{ name: 'home' }">
-				<img src="/builder_logo.png" alt="logo" class="h-7" />
-				<h1 class="text-md mt-[2px] font-semibold leading-5 text-gray-800 dark:text-gray-200">Builder</h1>
-			</router-link>
+		<div class="absolute left-3 flex items-center gap-5">
+			<MainMenu></MainMenu>
+			<div class="flex gap-2">
+				<Tooltip
+					:text="mode.description"
+					:hoverDelay="0.6"
+					v-for="mode in [
+						{ mode: 'select', icon: 'mouse-pointer', description: 'Select (v)' },
+						{ mode: 'container', icon: 'square', description: 'Container (c)' },
+						{ mode: 'text', icon: 'type', description: 'Text (t)' },
+						{ mode: 'image', icon: 'image', description: 'Image (i)' },
+					]">
+					<Button
+						variant="ghost"
+						:icon="mode.icon"
+						class="!text-gray-700 dark:!text-gray-200 hover:dark:bg-zinc-800 focus:dark:bg-zinc-700 [&[active='true']]:bg-gray-100 [&[active='true']]:!text-gray-900 [&[active='true']]:dark:bg-zinc-700 [&[active='true']]:dark:!text-zinc-50"
+						@click="() => (store.mode = mode.mode as BuilderMode)"
+						:active="store.mode === mode.mode"></Button>
+				</Tooltip>
+			</div>
 		</div>
-		<div class="ml-10 flex gap-3">
-			<Tooltip
-				:text="mode.description"
-				:hoverDelay="0.6"
-				v-for="mode in [
-					{ mode: 'select', icon: 'mouse-pointer', description: 'Select (v)' },
-					{ mode: 'text', icon: 'type', description: 'Text (t)' },
-					{ mode: 'container', icon: 'square', description: 'Container (c)' },
-					{ mode: 'image', icon: 'image', description: 'Image (i)' },
-				]">
-				<Button
-					variant="ghost"
-					:icon="mode.icon"
-					class="!text-gray-700 dark:!text-gray-200 hover:dark:bg-zinc-800 focus:dark:bg-zinc-700 [&[active='true']]:bg-gray-100 [&[active='true']]:!text-gray-900 [&[active='true']]:dark:bg-zinc-700 [&[active='true']]:dark:!text-zinc-50"
-					@click="store.mode = mode.mode as BuilderMode"
-					:active="store.mode === mode.mode"></Button>
-			</Tooltip>
+		<div>
+			<Popover transition="default" placement="bottom" popoverClass="!absolute top-0 !mt-[20px]">
+				<template #target="{ togglePopover, isOpen }">
+					<div class="flex cursor-pointer items-center gap-2 p-2 dark:bg-zinc-900 dark:text-zinc-200">
+						<div class="flex h-6 items-center text-base text-text-icons-gray-6" v-if="!store.activePage">
+							Loading...
+						</div>
+						<div @click="togglePopover" v-else class="flex items-center gap-1">
+							<span class="max-w-48 truncate text-base text-text-icons-gray-8">
+								{{ store?.activePage?.page_title || "My Page" }}
+							</span>
+							-
+							<span
+								class="flex max-w-96 gap-[2px] truncate text-base text-gray-500 dark:text-zinc-500"
+								v-html="routeString"></span>
+						</div>
+						<FeatherIcon
+							name="external-link"
+							v-if="store.activePage && store.activePage.published"
+							class="h-[14px] w-[14px] !text-gray-700 dark:!text-gray-200"
+							@click="store.openPageInBrowser(store.activePage as BuilderPage)"></FeatherIcon>
+					</div>
+				</template>
+				<template #body="{ close }">
+					<div
+						class="flex w-72 flex-col gap-3 rounded bg-white p-4 shadow-lg dark:bg-zinc-900"
+						v-if="store.activePage">
+						<PageOptions v-if="store.activePage" :page="store.activePage"></PageOptions>
+					</div>
+				</template>
+			</Popover>
 		</div>
+		<!-- actions -->
 		<div class="absolute right-3 flex items-center gap-5">
 			<Dialog
 				style="z-index: 40"
@@ -33,7 +63,7 @@
 					title: 'Get Started',
 					size: '4xl',
 				}"
-				v-model="showDialog">
+				v-model="showInfoDialog">
 				<template #body-content>
 					<iframe
 						class="h-[60vh] w-full rounded-sm"
@@ -61,7 +91,6 @@
 					</Tooltip>
 				</div>
 			</div>
-
 			<Badge
 				:variant="'subtle'"
 				theme="gray"
@@ -74,84 +103,74 @@
 			<span class="text-sm dark:text-zinc-300" v-if="store.savingPage && store.activePage?.is_template">
 				Saving template
 			</span>
-			<!-- <button @click="showDialog = true">
-				<FeatherIcon
-					name="info"
-					class="mr-4 h-4 w-4 cursor-pointer text-gray-600 dark:text-gray-400" />
-			</button> -->
-			<UseDark v-slot="{ isDark, toggleDark }">
-				<button @click="transitionTheme(toggleDark)">
-					<FeatherIcon
-						title="Toggle Theme"
-						:name="isDark ? 'moon' : 'sun'"
-						class="h-4 w-4 cursor-pointer text-gray-600 dark:text-gray-400" />
-				</button>
-			</UseDark>
-			<router-link
-				v-if="store.selectedPage"
-				:to="{ name: 'preview', params: { pageId: store.selectedPage } }"
-				title="Preview">
-				<FeatherIcon name="play" class="h-4 w-4 cursor-pointer text-gray-600 dark:text-gray-400" />
+			<Tooltip text="Settings" :hoverDelay="0.6">
+				<SettingsGearIcon
+					@click="showSettingsDialog = true"
+					class="h-4 w-4 cursor-pointer text-text-icons-gray-8"></SettingsGearIcon>
+			</Tooltip>
+			<Dialog
+				v-model="showSettingsDialog"
+				style="z-index: 40"
+				class="[&>div>div[id^=headlessui-dialog-panel]]:my-3"
+				:disableOutsideClickToClose="true"
+				:options="{
+					title: 'Settings',
+					size: '5xl',
+				}">
+				<template #body>
+					<Settings @close="showSettingsDialog = false"></Settings>
+				</template>
+			</Dialog>
+
+			<router-link :to="{ name: 'preview', params: { pageId: store.selectedPage } }" title="Preview">
+				<Tooltip text="Preview" :hoverDelay="0.6">
+					<PlayIcon class="h-[18px] w-[18px] cursor-pointer text-text-icons-gray-8"></PlayIcon>
+				</Tooltip>
 			</router-link>
 			<Button
-				v-if="!is_developer_mode"
 				variant="solid"
+				:disabled="!store.activePage?.draft_blocks"
+				iconLeft="globe"
 				@click="
 					() => {
 						publishing = true;
 						store.publishPage().finally(() => (publishing = false));
 					}
 				"
-				class="border-0 text-xs dark:bg-zinc-800"
+				class="border-0"
+				:class="{
+					'bg-surface-gray-7 !text-text-icons-white hover:bg-surface-gray-6':
+						!publishing && store.activePage?.draft_blocks,
+					'dark:bg-surface-gray-2 dark:text-text-icons-gray-4': !store.activePage?.draft_blocks,
+				}"
 				:loading="publishing">
 				{{ publishing ? "Publishing" : "Publish" }}
 			</Button>
-			<div class="flex" v-else>
-				<Button
-					variant="solid"
-					:disabled="Boolean(store.activePage?.is_template)"
-					@click="
-						() => {
-							publishing = true;
-							store.publishPage().finally(() => (publishing = false));
-						}
-					"
-					class="rounded-br-none rounded-tr-none border-0 pr-1 text-xs dark:bg-zinc-800"
-					:loading="publishing">
-					{{ publishing ? "Publishing" : "Publish" }}
-				</Button>
-				<Dropdown
-					:options="[
-						// { label: 'Publish', onClick: () => publish() },
-						{ label: 'Save As Template', onClick: () => saveAsTemplate() },
-					]"
-					size="sm"
-					class="flex-1 [&>div>div>div]:w-full"
-					placement="right">
-					<template v-slot="{ open }">
-						<Button
-							variant="solid"
-							@click="open"
-							:disabled="Boolean(store.activePage?.is_template)"
-							icon="chevron-down"
-							class="!w-6 justify-start rounded-bl-none rounded-tl-none border-0 pr-0 text-xs dark:bg-zinc-800"></Button>
-					</template>
-				</Dropdown>
-			</div>
 		</div>
 	</div>
 </template>
 <script setup lang="ts">
+import PlayIcon from "@/components/Icons/Play.vue";
+import SettingsGearIcon from "@/components/Icons/SettingsGear.vue";
 import { webPages } from "@/data/webPage";
-import { UseDark } from "@vueuse/components";
-import { Badge, Dialog, Dropdown, Tooltip } from "frappe-ui";
+import { BuilderPage } from "@/types/Builder/BuilderPage";
+import { useDark, useToggle } from "@vueuse/core";
+import { Badge, Dialog, Tooltip } from "frappe-ui";
+import Popover from "frappe-ui/src/components/Popover.vue";
 import { computed, ref } from "vue";
 import { toast } from "vue-sonner";
 import useStore from "../store";
+import MainMenu from "./MainMenu.vue";
+import PageOptions from "./PageOptions.vue";
+import Settings from "./Settings.vue";
+
+const isDark = useDark();
+const toggleDark = useToggle(isDark);
 
 const store = useStore();
 const publishing = ref(false);
-const showDialog = ref(false);
+const showInfoDialog = ref(false);
+const showSettingsDialog = ref(false);
 const toolbar = ref(null);
 
 const is_developer_mode = window.is_developer_mode;
@@ -175,6 +194,28 @@ declare global {
 		startViewTransition(callback: () => void): void;
 	}
 }
+
+const routeString = computed(() => {
+	const route = store.activePage?.route || "/";
+	const routeStringToReturn = route.split("/").map((part) => {
+		let variable = "";
+
+		if (part.startsWith(":")) {
+			variable = part.slice(1);
+		} else if (part.startsWith("<")) {
+			variable = part.slice(1, -1);
+		}
+		if (variable) {
+			const previewValue = store.routeVariables[variable];
+			return `<span class="${
+				previewValue ? "bg-blue-100" : "bg-purple-100"
+			} rounded-sm px-1 py-[1px] pb-[2px] text-sm">${previewValue || part}</span>`;
+		} else {
+			return part;
+		}
+	});
+	return routeStringToReturn.join("/");
+});
 
 const transitionTheme = (toggleDark: () => void) => {
 	if (document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
